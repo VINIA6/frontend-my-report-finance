@@ -91,3 +91,17 @@
 * {
   @apply transition-colors duration-200;
 }
+
+/* Dropdown menu overflow fix */
+.expenses-list-container {
+  position: relative;
+}
+
+.expenses-list-container .dropdown-menu {
+  z-index: 50;
+}
+
+/* Ensure dropdown is always visible */
+.relative:has(.dropdown-menu) {
+  overflow: visible !important;
+}

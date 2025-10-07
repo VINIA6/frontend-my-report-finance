@@ -4,14 +4,14 @@ import { TrendingUp, Info } from 'lucide-react'
 
 const QuarterlyChart: React.FC = () => {
   const data = [
-    { quarter: 'Q1', gastos: 45000, week: 'Semana 1 (Dia 1-7)' },
-    { quarter: 'Q2', gastos: 52000, week: 'Semana 2 (Dia 8-14)' },
-    { quarter: 'Q3', gastos: 48000, week: 'Semana 3 (Dia 15-21)' },
-    { quarter: 'Q4', gastos: 55000, week: 'Semana 4 (Dia 22-30)' },
+    { quarter: 'Q1', gastos: 1200, week: 'Semana 1 (Dia 1-7)' },
+    { quarter: 'Q2', gastos: 800, week: 'Semana 2 (Dia 8-14)' },
+    { quarter: 'Q3', gastos: 1000, week: 'Semana 3 (Dia 15-21)' },
+    { quarter: 'Q4', gastos: 1600, week: 'Semana 4 (Dia 22-30)' },
   ]
 
   const average = data.reduce((acc, curr) => acc + curr.gastos, 0) / data.length
-  const meta = 60000 // Meta mensal
+  const meta = 750 // Meta mensal
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
