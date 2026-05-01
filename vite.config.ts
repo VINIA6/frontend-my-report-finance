@@ -4,14 +4,32 @@ import electron from 'vite-plugin-electron/simple'
 
 const isElectron = process.env.ELECTRON === 'true'
 
+const cjsOutput = {
+  rollupOptions: {
+    output: { format: 'cjs' as const, entryFileNames: '[name].cjs' },
+  },
+}
+
 export default defineConfig({
   plugins: [
     react(),
     ...(isElectron
       ? [
           electron({
-            main: { entry: 'electron/main.ts' },
-            preload: { input: 'electron/preload.ts' },
+            main: {
+              entry: 'electron/main.ts',
+              vite: { build: cjsOutput },
+            },
+            preload: {
+              input: 'electron/preload.ts',
+              vite: {
+                build: {
+                  rollupOptions: {
+                    output: { format: 'cjs' as const, entryFileNames: '[name].js' },
+                  },
+                },
+              },
+            },
           }),
         ]
       : []),
