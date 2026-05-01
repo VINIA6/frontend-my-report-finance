@@ -25,14 +25,23 @@ services:
     restart: always
     env_file:
       - ./api/.env
-    ports:
-      - "8000:8000"
     depends_on:
       db:
         condition: service_healthy
     volumes:
       - ./api:/app
-    command: uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
+    command: uvicorn src.main:app --host 0.0.0.0 --port 8000
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: my-report-finance-frontend
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - api
 
 volumes:
   postgres_data:
