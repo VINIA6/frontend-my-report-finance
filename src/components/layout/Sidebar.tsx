@@ -3,9 +3,10 @@ import {
   BarChart3,
   Settings,
   ChevronLeft,
+  Split,
 } from 'lucide-react'
 
-export type Page = 'dashboard' | 'relatorios' | 'configuracoes'
+export type Page = 'dashboard' | 'relatorios' | 'divisao' | 'configuracoes'
 
 interface SidebarProps {
   isOpen: boolean
@@ -17,6 +18,7 @@ interface SidebarProps {
 const menuItems: { id: Page; label: string; icon: typeof LayoutDashboard }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'relatorios', label: 'Relatorios', icon: BarChart3 },
+  { id: 'divisao', label: 'Dividir Contas', icon: Split },
   { id: 'configuracoes', label: 'Configuracoes', icon: Settings },
 ]
 

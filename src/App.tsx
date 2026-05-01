@@ -7,6 +7,7 @@ import MonthSelector from './components/layout/MonthSelector'
 import DashboardPF from './pages/DashboardPF'
 import DashboardPJ from './pages/DashboardPJ'
 import ReportsPage from './pages/ReportsPage'
+import DivisaoContas from './pages/DivisaoContas'
 import { useFinanceData, getCurrentMonth } from './hooks/useFinanceData'
 
 type Tab = 'pf' | 'pj'
@@ -94,6 +95,12 @@ function Dashboard() {
               userType={user!.userType}
               salary={user!.salary}
             />
+          </div>
+        )}
+
+        {activePage === 'divisao' && (
+          <div className="px-6 py-6">
+            <DivisaoContas />
           </div>
         )}
 

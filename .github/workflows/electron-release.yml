@@ -30,6 +30,13 @@ jobs:
           node-version: 20
           cache: pnpm
 
+      - name: Set version from tag
+        shell: bash
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          npm pkg set version="$VERSION"
+          echo "Building version $VERSION"
+
       - name: Install dependencies
         run: pnpm install
 

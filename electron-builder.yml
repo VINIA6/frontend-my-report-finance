@@ -44,3 +44,4 @@ publish:
   provider: github
   owner: VINIA6
   repo: frontend-my-report-finance
+  releaseType: release
