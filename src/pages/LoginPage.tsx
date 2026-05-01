@@ -17,25 +17,51 @@ import {
 import { useAuth } from '../contexts/AuthContext'
 import type { UserType } from '../services/authService'
 
-const RELEASES_URL = 'https://github.com/VINIA6/frontend-my-report-finance/releases/latest'
+const BASE_URL = 'https://github.com/VINIA6/frontend-my-report-finance/releases/latest/download'
 
-function detectPlatform(): 'mac' | 'win' | 'linux' {
+function detectPlatform(): 'mac-x64' | 'mac-arm64' | 'win' | 'linux' {
   const ua = navigator.userAgent.toLowerCase()
-  if (ua.includes('mac')) return 'mac'
+  if (ua.includes('mac')) {
+    return (navigator as { userAgentData?: { platform?: string } }).userAgentData?.platform === 'macOS' && ua.includes('arm')
+      ? 'mac-arm64'
+      : 'mac-x64'
+  }
   if (ua.includes('win')) return 'win'
   return 'linux'
 }
+
+const PLATFORMS = [
+  {
+    id: 'linux' as const,
+    label: 'Linux',
+    sub: '.AppImage',
+    url: `${BASE_URL}/MyReportFinance-linux.AppImage`,
+  },
+  {
+    id: 'win' as const,
+    label: 'Windows',
+    sub: '.exe',
+    url: `${BASE_URL}/MyReportFinance-windows.exe`,
+  },
+  {
+    id: 'mac-x64' as const,
+    label: 'Mac Intel',
+    sub: '.dmg',
+    url: `${BASE_URL}/MyReportFinance-mac-x64.dmg`,
+  },
+  {
+    id: 'mac-arm64' as const,
+    label: 'Mac Apple Silicon',
+    sub: '.dmg',
+    url: `${BASE_URL}/MyReportFinance-mac-arm64.dmg`,
+  },
+]
 
 function DownloadSection() {
   if (window.electronAPI) return null
 
   const current = detectPlatform()
-
-  const platforms = [
-    { id: 'mac' as const, label: 'macOS', sub: 'Apple Silicon + Intel', ext: '.dmg' },
-    { id: 'win' as const, label: 'Windows', sub: 'Instalador .exe', ext: '.exe' },
-    { id: 'linux' as const, label: 'Linux', sub: 'AppImage / .deb', ext: '.AppImage' },
-  ]
+  const recommended = PLATFORMS.find(p => p.id === current) ?? PLATFORMS[0]
 
   return (
     <div className="mt-6">
@@ -46,39 +72,28 @@ function DownloadSection() {
             Baixar app desktop
           </span>
         </div>
+
+        {/* Botão principal — download direto para a plataforma detectada */}
+        <a
+          href={recommended.url}
+          className="flex items-center justify-center space-x-2 w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-xl transition-colors mb-3"
+        >
+          <Download className="w-4 h-4" />
+          <span>Baixar para {recommended.label}</span>
+          <span className="opacity-70 text-xs">{recommended.sub}</span>
+        </a>
+
+        {/* Outras plataformas */}
         <div className="grid grid-cols-3 gap-2">
-          {platforms.map(({ id, label, sub }) => (
+          {PLATFORMS.filter(p => p.id !== current).map(({ id, label, sub, url }) => (
             <a
               key={id}
-              href={RELEASES_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={`flex flex-col items-center p-3 rounded-xl border-2 transition-all hover:shadow-sm group ${
-                current === id
-                  ? 'border-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 dark:border-indigo-600'
-                  : 'border-gray-200 dark:border-gray-600 hover:border-indigo-300 dark:hover:border-indigo-700'
-              }`}
+              href={url}
+              className="flex flex-col items-center p-2.5 rounded-xl border border-gray-200 dark:border-gray-600 hover:border-indigo-300 dark:hover:border-indigo-700 text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all group"
             >
-              <Download className={`w-4 h-4 mb-1 ${
-                current === id
-                  ? 'text-indigo-600 dark:text-indigo-400'
-                  : 'text-gray-400 group-hover:text-indigo-500'
-              }`} />
-              <span className={`text-xs font-semibold ${
-                current === id
-                  ? 'text-indigo-700 dark:text-indigo-300'
-                  : 'text-gray-600 dark:text-gray-400'
-              }`}>
-                {label}
-              </span>
-              <span className="text-[10px] text-gray-400 dark:text-gray-500 text-center mt-0.5">
-                {sub}
-              </span>
-              {current === id && (
-                <span className="text-[9px] font-medium text-indigo-500 dark:text-indigo-400 mt-1 uppercase tracking-wide">
-                  Recomendado
-                </span>
-              )}
+              <Download className="w-3.5 h-3.5 mb-1 group-hover:text-indigo-500 transition-colors" />
+              <span className="text-xs font-medium">{label}</span>
+              <span className="text-[10px] text-gray-400 dark:text-gray-500">{sub}</span>
             </a>
           ))}
         </div>

@@ -16,23 +16,21 @@ mac:
       arch:
         - x64
         - arm64
-    - target: zip
-      arch:
-        - x64
-        - arm64
+  artifactName: MyReportFinance-mac-${arch}.${ext}
   category: public.app-category.finance
   icon: build/icon.icns
 
 linux:
   target:
     - target: AppImage
-    - target: deb
+  artifactName: MyReportFinance-linux.${ext}
   category: Finance
   icon: build/icon.png
 
 win:
   target:
     - target: nsis
+  artifactName: MyReportFinance-windows.${ext}
   icon: build/icon.ico
 
 nsis:
