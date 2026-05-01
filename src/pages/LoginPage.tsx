@@ -34,8 +34,8 @@ const PLATFORMS = [
   {
     id: 'linux' as const,
     label: 'Linux',
-    sub: '.AppImage',
-    url: `${BASE_URL}/MyReportFinance-linux.AppImage`,
+    sub: '.deb',
+    url: `${BASE_URL}/MyReportFinance-linux.deb`,
   },
   {
     id: 'win' as const,

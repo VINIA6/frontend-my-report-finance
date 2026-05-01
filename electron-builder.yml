@@ -22,7 +22,7 @@ mac:
 
 linux:
   target:
-    - target: AppImage
+    - target: deb
   artifactName: MyReportFinance-linux.${ext}
   category: Finance
   icon: build/icon.png
