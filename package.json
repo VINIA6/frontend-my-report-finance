@@ -2,9 +2,12 @@
   "name": "my-report-finance",
   "productName": "My Report Finance",
   "description": "Controle financeiro pessoal e empresarial",
-  "author": "VINIA6",
+  "author": {
+    "name": "VINIA6",
+    "email": "viniciusdeassisazevedo@hotmail.com"
+  },
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "main": "dist-electron/main.cjs",
   "scripts": {
