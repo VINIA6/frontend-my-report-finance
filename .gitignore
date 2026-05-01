@@ -30,10 +30,6 @@ dist-ssr
 .env.test.local
 .env.production.local
 
-# Build outputs
-build/
-out/
-
 # Coverage directory used by tools like istanbul
 coverage/
 *.lcov
@@ -84,3 +80,14 @@ dist
 # Temporary folders
 tmp/
 temp/
+
+# Python / API
+api/__pycache__/
+api/**/__pycache__/
+api/.env
+api/venv/
+*.pyc
+
+# Electron
+dist-electron/
+release/

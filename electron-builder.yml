@@ -1,0 +1,46 @@
+appId: com.vinia6.myreportfinance
+productName: My Report Finance
+copyright: Copyright © 2025 VINIA6
+
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - dist/**/*
+  - dist-electron/**/*
+
+mac:
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+    - target: zip
+      arch:
+        - x64
+        - arm64
+  category: public.app-category.finance
+  icon: build/icon.icns
+
+linux:
+  target:
+    - target: AppImage
+    - target: deb
+  category: Finance
+  icon: build/icon.png
+
+win:
+  target:
+    - target: nsis
+  icon: build/icon.ico
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  perMachine: false
+
+publish:
+  provider: github
+  owner: VINIA6
+  repo: frontend-my-report-finance
