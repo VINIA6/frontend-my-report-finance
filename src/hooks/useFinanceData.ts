@@ -1,12 +1,8 @@
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import type {
-  FinanceData,
-  MonthlyPeriod,
-  Income,
-  Expense,
-  ExpenseTemplate,
-  PeriodSummary,
+  FinanceData, MonthlyPeriod, Income, Expense, ExpenseTemplate, PeriodSummary,
 } from '../types/finance'
+import { financeService } from '../services/financeService'
 
 function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
@@ -16,42 +12,29 @@ function storageKey(userId: string) {
   return `finance_data_${userId}`
 }
 
-function loadData(userId: string): FinanceData {
+function loadLocal(userId: string): FinanceData {
   try {
     const raw = localStorage.getItem(storageKey(userId))
     if (raw) return JSON.parse(raw)
-  } catch {
-    // ignore
-  }
+  } catch { /* ignore */ }
   return { templates: [], periods: {} }
 }
 
-function saveData(userId: string, data: FinanceData) {
+function saveLocal(userId: string, data: FinanceData) {
   localStorage.setItem(storageKey(userId), JSON.stringify(data))
 }
 
 function templateToExpense(t: ExpenseTemplate): Expense {
   return {
-    id: generateId(),
-    name: t.name,
-    value: t.fixed ? t.value : null, // variavel = null ate preencher
-    dueDay: t.dueDay,
-    paid: false,
-    paidAt: null,
-    fixed: t.fixed,
-    templateId: t.id,
+    id: generateId(), name: t.name, value: t.fixed ? t.value : null,
+    dueDay: t.dueDay, paid: false, paidAt: null, fixed: t.fixed, templateId: t.id,
   }
 }
 
-function createPeriodFromTemplates(
-  month: string,
-  templates: ExpenseTemplate[]
-): MonthlyPeriod {
-  // So aplica templates que comecam neste mes ou antes
+function createPeriodFromTemplates(month: string, templates: ExpenseTemplate[]): MonthlyPeriod {
   const applicable = templates.filter(t => !t.startMonth || t.startMonth <= month)
   return {
-    month,
-    incomes: [],
+    month, incomes: [],
     pjExpenses: applicable.filter(t => t.type === 'pj').map(templateToExpense),
     pfExpenses: applicable.filter(t => t.type === 'pf').map(templateToExpense),
   }
@@ -64,10 +47,8 @@ export function getCurrentMonth(): string {
 
 export function formatMonthLabel(month: string): string {
   const [year, m] = month.split('-')
-  const months = [
-    'Janeiro', 'Fevereiro', 'Marco', 'Abril', 'Maio', 'Junho',
-    'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
-  ]
+  const months = ['Janeiro', 'Fevereiro', 'Marco', 'Abril', 'Maio', 'Junho',
+    'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
   return `${months[parseInt(m, 10) - 1]} ${year}`
 }
 
@@ -77,31 +58,71 @@ export function navigateMonth(month: string, direction: -1 | 1): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
 }
 
+// Debounce helper para não sobrecarregar a API em cada keystroke
+function useDebounce<T>(value: T, delay: number): T {
+  const [debounced, setDebounced] = useState(value)
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), delay)
+    return () => clearTimeout(t)
+  }, [value, delay])
+  return debounced
+}
+
 export function useFinanceData(selectedMonth: string, userId: string) {
-  const [data, setData] = useState<FinanceData>(() => loadData(userId))
+  const [data, setData] = useState<FinanceData>(() => loadLocal(userId))
+  const [synced, setSynced] = useState(false)
+  const isMounted = useRef(true)
+
+  // Carrega dados da API ao montar
+  useEffect(() => {
+    isMounted.current = true
+    financeService.getData()
+      .then(apiData => {
+        if (!isMounted.current) return
+        const hasApiData = apiData.templates.length > 0 || Object.keys(apiData.periods).length > 0
+        const local = loadLocal(userId)
+        const hasLocal = local.templates.length > 0 || Object.keys(local.periods).length > 0
+
+        if (hasApiData) {
+          // API tem dados → usa como fonte da verdade
+          setData(apiData)
+          saveLocal(userId, apiData)
+        } else if (hasLocal) {
+          // API vazia mas localStorage tem dados → migra para API
+          financeService.syncData(local).catch(() => { /* silent */ })
+        }
+        setSynced(true)
+      })
+      .catch(() => {
+        // Sem conexão → usa localStorage
+        if (isMounted.current) setSynced(true)
+      })
+    return () => { isMounted.current = false }
+  }, [userId])
+
+  // Debounce para sync com API (evita chamada a cada tecla)
+  const debouncedData = useDebounce(data, 800)
+  const syncedRef = useRef(false)
+  useEffect(() => {
+    if (!syncedRef.current) { syncedRef.current = synced; return }
+    if (!synced) return
+    financeService.syncData(debouncedData).catch(() => { /* silent */ })
+  }, [debouncedData, synced])
 
   const persist = useCallback((next: FinanceData) => {
     setData(next)
-    saveData(userId, next)
+    saveLocal(userId, next)
   }, [userId])
 
-  // Get or create period for selected month
   const period: MonthlyPeriod = useMemo(() => {
-    if (data.periods[selectedMonth]) {
-      return data.periods[selectedMonth]
-    }
+    if (data.periods[selectedMonth]) return data.periods[selectedMonth]
     return createPeriodFromTemplates(selectedMonth, data.templates)
   }, [data, selectedMonth])
 
-  // Ensure period exists in storage
   const ensurePeriod = useCallback(() => {
     if (!data.periods[selectedMonth]) {
       const newPeriod = createPeriodFromTemplates(selectedMonth, data.templates)
-      const next = {
-        ...data,
-        periods: { ...data.periods, [selectedMonth]: newPeriod },
-      }
-      persist(next)
+      persist({ ...data, periods: { ...data.periods, [selectedMonth]: newPeriod } })
       return newPeriod
     }
     return data.periods[selectedMonth]
@@ -109,170 +130,84 @@ export function useFinanceData(selectedMonth: string, userId: string) {
 
   const updatePeriod = useCallback(
     (updater: (p: MonthlyPeriod) => MonthlyPeriod) => {
-      const current = data.periods[selectedMonth]
-        ?? createPeriodFromTemplates(selectedMonth, data.templates)
-      const updated = updater(current)
-      persist({
-        ...data,
-        periods: { ...data.periods, [selectedMonth]: updated },
-      })
+      const current = data.periods[selectedMonth] ?? createPeriodFromTemplates(selectedMonth, data.templates)
+      persist({ ...data, periods: { ...data.periods, [selectedMonth]: updater(current) } })
     },
     [data, selectedMonth, persist]
   )
 
   // === INCOME ===
-  const addIncome = useCallback(
-    (description: string, value: number, receivedAt: string | null) => {
-      updatePeriod(p => ({
-        ...p,
-        incomes: [...p.incomes, { id: generateId(), description, value, receivedAt }],
-      }))
-    },
-    [updatePeriod]
-  )
+  const addIncome = useCallback((description: string, value: number, receivedAt: string | null) => {
+    updatePeriod(p => ({ ...p, incomes: [...p.incomes, { id: generateId(), description, value, receivedAt }] }))
+  }, [updatePeriod])
 
-  const removeIncome = useCallback(
-    (id: string) => {
-      updatePeriod(p => ({
-        ...p,
-        incomes: p.incomes.filter(i => i.id !== id),
-      }))
-    },
-    [updatePeriod]
-  )
+  const removeIncome = useCallback((id: string) => {
+    updatePeriod(p => ({ ...p, incomes: p.incomes.filter(i => i.id !== id) }))
+  }, [updatePeriod])
 
-  const updateIncome = useCallback(
-    (id: string, updates: Partial<Omit<Income, 'id'>>) => {
-      updatePeriod(p => ({
-        ...p,
-        incomes: p.incomes.map(i => (i.id === id ? { ...i, ...updates } : i)),
-      }))
-    },
-    [updatePeriod]
-  )
+  const updateIncome = useCallback((id: string, updates: Partial<Omit<Income, 'id'>>) => {
+    updatePeriod(p => ({ ...p, incomes: p.incomes.map(i => (i.id === id ? { ...i, ...updates } : i)) }))
+  }, [updatePeriod])
 
-  // === EXPENSES (PJ & PF) ===
-  const addExpense = useCallback(
-    (type: 'pj' | 'pf', name: string, value: number | null, dueDay: number, fixed: boolean) => {
-      const expense: Expense = {
-        id: generateId(),
-        name,
-        value,
-        dueDay,
-        paid: false,
-        paidAt: null,
-        fixed,
-      }
-      updatePeriod(p => ({
-        ...p,
-        [type === 'pj' ? 'pjExpenses' : 'pfExpenses']: [
-          ...p[type === 'pj' ? 'pjExpenses' : 'pfExpenses'],
-          expense,
-        ],
-      }))
-    },
-    [updatePeriod]
-  )
+  // === EXPENSES ===
+  const addExpense = useCallback((type: 'pj' | 'pf', name: string, value: number | null, dueDay: number, fixed: boolean) => {
+    const expense: Expense = { id: generateId(), name, value, dueDay, paid: false, paidAt: null, fixed }
+    const key = type === 'pj' ? 'pjExpenses' : 'pfExpenses'
+    updatePeriod(p => ({ ...p, [key]: [...p[key], expense] }))
+  }, [updatePeriod])
 
-  const removeExpense = useCallback(
-    (type: 'pj' | 'pf', id: string) => {
-      const key = type === 'pj' ? 'pjExpenses' : 'pfExpenses'
-      updatePeriod(p => ({
-        ...p,
-        [key]: p[key].filter(e => e.id !== id),
-      }))
-    },
-    [updatePeriod]
-  )
+  const removeExpense = useCallback((type: 'pj' | 'pf', id: string) => {
+    const key = type === 'pj' ? 'pjExpenses' : 'pfExpenses'
+    updatePeriod(p => ({ ...p, [key]: p[key].filter(e => e.id !== id) }))
+  }, [updatePeriod])
 
-  const toggleExpensePaid = useCallback(
-    (type: 'pj' | 'pf', id: string) => {
-      const key = type === 'pj' ? 'pjExpenses' : 'pfExpenses'
-      updatePeriod(p => ({
-        ...p,
-        [key]: p[key].map(e =>
-          e.id === id
-            ? { ...e, paid: !e.paid, paidAt: !e.paid ? new Date().toISOString() : null }
-            : e
-        ),
-      }))
-    },
-    [updatePeriod]
-  )
+  const toggleExpensePaid = useCallback((type: 'pj' | 'pf', id: string) => {
+    const key = type === 'pj' ? 'pjExpenses' : 'pfExpenses'
+    updatePeriod(p => ({
+      ...p,
+      [key]: p[key].map(e => e.id === id
+        ? { ...e, paid: !e.paid, paidAt: !e.paid ? new Date().toISOString() : null }
+        : e
+      ),
+    }))
+  }, [updatePeriod])
 
-  const updateExpense = useCallback(
-    (type: 'pj' | 'pf', id: string, updates: Partial<Omit<Expense, 'id'>>) => {
-      const key = type === 'pj' ? 'pjExpenses' : 'pfExpenses'
-      updatePeriod(p => ({
-        ...p,
-        [key]: p[key].map(e => (e.id === id ? { ...e, ...updates } : e)),
-      }))
-    },
-    [updatePeriod]
-  )
+  const updateExpense = useCallback((type: 'pj' | 'pf', id: string, updates: Partial<Omit<Expense, 'id'>>) => {
+    const key = type === 'pj' ? 'pjExpenses' : 'pfExpenses'
+    updatePeriod(p => ({ ...p, [key]: p[key].map(e => (e.id === id ? { ...e, ...updates } : e)) }))
+  }, [updatePeriod])
 
   // === TEMPLATES ===
-  const addTemplate = useCallback(
-    (name: string, value: number | null, dueDay: number, type: 'pj' | 'pf', fixed: boolean) => {
-      const template: ExpenseTemplate = {
-        id: generateId(), name, value, dueDay, type, fixed,
-        startMonth: selectedMonth,
+  const addTemplate = useCallback((name: string, value: number | null, dueDay: number, type: 'pj' | 'pf', fixed: boolean) => {
+    const template: ExpenseTemplate = { id: generateId(), name, value, dueDay, type, fixed, startMonth: selectedMonth }
+    const next = { ...data, templates: [...data.templates, template] }
+    const key = type === 'pj' ? 'pjExpenses' : 'pfExpenses'
+    const updatedPeriods = { ...next.periods }
+    for (const [month, p] of Object.entries(updatedPeriods)) {
+      if (month >= selectedMonth) {
+        updatedPeriods[month] = { ...p, [key]: [...p[key], templateToExpense(template)] }
       }
-      const next = { ...data, templates: [...data.templates, template] }
+    }
+    persist({ ...next, periods: updatedPeriods })
+  }, [data, persist, selectedMonth])
 
-      // Injetar despesa em todos os periodos ja salvos >= startMonth
-      const key = type === 'pj' ? 'pjExpenses' : 'pfExpenses'
-      const updatedPeriods = { ...next.periods }
-      for (const [periodMonth, period] of Object.entries(updatedPeriods)) {
-        if (periodMonth >= selectedMonth) {
-          updatedPeriods[periodMonth] = {
-            ...period,
-            [key]: [...period[key], templateToExpense(template)],
-          }
-        }
-      }
-      next.periods = updatedPeriods
+  const removeTemplate = useCallback((id: string) => {
+    persist({ ...data, templates: data.templates.filter(t => t.id !== id) })
+  }, [data, persist])
 
-      persist(next)
-    },
-    [data, persist, selectedMonth]
-  )
+  const removeExpenseAndTemplate = useCallback((type: 'pj' | 'pf', expenseId: string, templateId: string) => {
+    const key = type === 'pj' ? 'pjExpenses' : 'pfExpenses'
+    const currentPeriod = data.periods[selectedMonth] ?? createPeriodFromTemplates(selectedMonth, data.templates)
+    persist({
+      ...data,
+      templates: data.templates.filter(t => t.id !== templateId),
+      periods: { ...data.periods, [selectedMonth]: { ...currentPeriod, [key]: currentPeriod[key].filter(e => e.id !== expenseId) } },
+    })
+  }, [data, selectedMonth, persist])
 
-  const removeTemplate = useCallback(
-    (id: string) => {
-      persist({ ...data, templates: data.templates.filter(t => t.id !== id) })
-    },
-    [data, persist]
-  )
-
-  // Operacao atomica: remove despesa do mes + template (evita stale closure)
-  const removeExpenseAndTemplate = useCallback(
-    (type: 'pj' | 'pf', expenseId: string, templateId: string) => {
-      const key = type === 'pj' ? 'pjExpenses' : 'pfExpenses'
-      const currentPeriod = data.periods[selectedMonth]
-        ?? createPeriodFromTemplates(selectedMonth, data.templates)
-      const updatedPeriod = {
-        ...currentPeriod,
-        [key]: currentPeriod[key].filter(e => e.id !== expenseId),
-      }
-      persist({
-        ...data,
-        templates: data.templates.filter(t => t.id !== templateId),
-        periods: { ...data.periods, [selectedMonth]: updatedPeriod },
-      })
-    },
-    [data, selectedMonth, persist]
-  )
-
-  const updateTemplate = useCallback(
-    (id: string, updates: Partial<Omit<ExpenseTemplate, 'id'>>) => {
-      persist({
-        ...data,
-        templates: data.templates.map(t => (t.id === id ? { ...t, ...updates } : t)),
-      })
-    },
-    [data, persist]
-  )
+  const updateTemplate = useCallback((id: string, updates: Partial<Omit<ExpenseTemplate, 'id'>>) => {
+    persist({ ...data, templates: data.templates.map(t => (t.id === id ? { ...t, ...updates } : t)) })
+  }, [data, persist])
 
   // === SUMMARY ===
   const summary: PeriodSummary = useMemo(() => {
@@ -283,44 +218,20 @@ export function useFinanceData(selectedMonth: string, userId: string) {
     const pfExpensesTotal = period.pfExpenses.reduce((s, e) => s + (e.value ?? 0), 0)
     const pfExpensesPaid = period.pfExpenses.filter(e => e.paid).reduce((s, e) => s + (e.value ?? 0), 0)
     const saved = netToCpf - pfExpensesTotal
-
     const pjCount = period.pjExpenses.length
     const pfCount = period.pfExpenses.length
-    const pjPaidCount = period.pjExpenses.filter(e => e.paid).length
-    const pfPaidCount = period.pfExpenses.filter(e => e.paid).length
-
     return {
-      grossIncome,
-      pjExpensesTotal,
-      pjExpensesPaid,
-      netToCpf,
-      pfExpensesTotal,
-      pfExpensesPaid,
-      saved,
-      pjProgress: pjCount > 0 ? Math.round((pjPaidCount / pjCount) * 100) : 100,
-      pfProgress: pfCount > 0 ? Math.round((pfPaidCount / pfCount) * 100) : 100,
+      grossIncome, pjExpensesTotal, pjExpensesPaid, netToCpf,
+      pfExpensesTotal, pfExpensesPaid, saved,
+      pjProgress: pjCount > 0 ? Math.round((period.pjExpenses.filter(e => e.paid).length / pjCount) * 100) : 100,
+      pfProgress: pfCount > 0 ? Math.round((period.pfExpenses.filter(e => e.paid).length / pfCount) * 100) : 100,
     }
   }, [period])
 
   return {
-    period,
-    summary,
-    templates: data.templates,
-    allPeriods: data.periods,
-    ensurePeriod,
-    // Income
-    addIncome,
-    removeIncome,
-    updateIncome,
-    // Expenses
-    addExpense,
-    removeExpense,
-    toggleExpensePaid,
-    updateExpense,
-    // Templates
-    addTemplate,
-    removeTemplate,
-    removeExpenseAndTemplate,
-    updateTemplate,
+    period, summary, templates: data.templates, allPeriods: data.periods, ensurePeriod,
+    addIncome, removeIncome, updateIncome,
+    addExpense, removeExpense, toggleExpensePaid, updateExpense,
+    addTemplate, removeTemplate, removeExpenseAndTemplate, updateTemplate,
   }
 }

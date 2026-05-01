@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from src.auth.routes.auth_routes import router as auth_router
 from src.fixed_expenses.routes.expense_routes import router as expenses_router
 from src.salary.routes.salary_routes import router as salary_router
+from src.finance.routes.finance_routes import router as finance_router
 
 app = FastAPI(
     title="My Report Finance API",
@@ -21,6 +22,7 @@ app.add_middleware(
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(expenses_router, prefix="/api/v1")
 app.include_router(salary_router, prefix="/api/v1")
+app.include_router(finance_router, prefix="/api/v1")
 
 
 @app.get("/health", tags=["Health"])
